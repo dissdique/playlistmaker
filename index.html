@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contact Sheet → Playlist</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.0/dist/tesseract.min.js"></script>
+<style>
+  :root{
+    --bg:#0E0E10;
+    --surface:#17171A;
+    --surface2:#1E1E22;
+    --line:#2A2A2E;
+    --text:#F2F1EC;
+    --muted:#8A8A8E;
+    --green:#1DB954;
+    --amber:#E8A33D;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    padding-bottom:80px;
+  }
+  header{
+    padding:28px 20px 20px;
+    border-bottom:1px solid var(--line);
+    position:relative;
+    overflow:hidden;
+  }
+  header::before{
+    content:"";
+    position:absolute;
+    top:0; left:0; right:0;
+    height:10px;
+    background-image:repeating-linear-gradient(90deg, var(--line) 0 6px, transparent 6px 16px);
+  }
+  h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:28px;
+    margin:10px 0 4px;
+    letter-spacing:-0.02em;
+  }
+  .sub{
+    color:var(--muted);
+    font-size:14px;
+    margin:0;
+  }
+  section{ padding:20px; }
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.08em;
+    color:var(--amber);
+    text-transform:uppercase;
+    margin-bottom:10px;
+  }
+  button{
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:14px;
+    border:none;
+    border-radius:8px;
+    padding:12px 18px;
+    cursor:pointer;
+    transition:transform .1s ease, opacity .15s ease;
+  }
+  button:active{ transform:scale(0.98); }
+  button:disabled{ opacity:0.4; cursor:not-allowed; }
+  .btn-primary{ background:var(--green); color:#04140A; }
+  .btn-secondary{ background:var(--surface2); color:var(--text); border:1px solid var(--line); }
+  .btn-block{ width:100%; }
+  input[type=text]{
+    width:100%;
+    background:var(--surface2);
+    border:1px solid var(--line);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    padding:10px 12px;
+    border-radius:6px;
+    margin-top:4px;
+  }
+  input[type=text]:focus, button:focus-visible{
+    outline:2px solid var(--amber);
+    outline-offset:1px;
+  }
+  label{ font-size:12px; color:var(--muted); display:block; margin-top:10px; }
+
+  #connect-panel, #picker-panel, #playlist-panel{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:18px;
+    margin-bottom:18px;
+  }
+  .connected-pill{
+    display:inline-flex; align-items:center; gap:6px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--green);
+  }
+  .connected-pill::before{
+    content:"";
+    width:7px; height:7px; border-radius:50%;
+    background:var(--green);
+    display:inline-block;
+  }
+
+  #dropzone{
+    border:1px dashed var(--line);
+    border-radius:10px;
+    padding:30px 16px;
+    text-align:center;
+    color:var(--muted);
+    font-size:13px;
+  }
+  #frames{
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+    margin-top:16px;
+  }
+  .frame{
+    display:flex;
+    gap:12px;
+    background:var(--surface2);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:12px;
+    position:relative;
+  }
+  .frame img{
+    width:64px; height:64px;
+    object-fit:cover;
+    border-radius:6px;
+    flex-shrink:0;
+    background:#000;
+  }
+  .frame-body{ flex:1; min-width:0; }
+  .frame-num{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--amber);
+    margin-bottom:2px;
+  }
+  .ocr-raw{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--muted);
+    max-height:0;
+    overflow:hidden;
+    transition:max-height .3s ease, opacity .3s ease;
+    opacity:0;
+    white-space:pre-wrap;
+    word-break:break-word;
+  }
+  .ocr-raw.show{ max-height:200px; opacity:1; margin-top:8px; }
+  .toggle-raw{
+    background:none; border:none; color:var(--muted);
+    font-size:11px; text-decoration:underline; padding:4px 0;
+    font-family:'IBM Plex Mono',monospace;
+  }
+  .developing{
+    animation:develop 1.1s ease-in-out infinite;
+  }
+  @keyframes develop{
+    0%,100%{ opacity:0.35; }
+    50%{ opacity:1; }
+  }
+  .match-card{
+    display:flex; align-items:center; gap:10px;
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:8px; padding:8px; margin-top:8px;
+  }
+  .match-card img{ width:40px; height:40px; border-radius:4px; }
+  .match-title{ font-size:13px; font-weight:500; }
+  .match-artist{ font-size:12px; color:var(--muted); }
+  .no-match{ font-size:12px; color:var(--muted); font-style:italic; margin-top:8px; }
+  select{
+    background:var(--surface2); color:var(--text);
+    border:1px solid var(--line); border-radius:6px;
+    font-family:'Inter',sans-serif; font-size:12px; padding:6px;
+    margin-top:6px; width:100%;
+  }
+  .remove-frame{
+    position:absolute; top:8px; right:8px;
+    background:none; border:none; color:var(--muted);
+    font-size:16px; padding:0; line-height:1;
+  }
+  #status-bar{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--muted);
+    margin-top:10px;
+    min-height:16px;
+  }
+  a.playlist-link{
+    color:var(--green);
+    font-weight:600;
+    text-decoration:none;
+  }
+  .hidden{ display:none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">Frame → Track → Playlist</div>
+  <h1>Contact Sheet</h1>
+  <p class="sub">Pull song screenshots from your gallery, read the text off them, build a Spotify playlist.</p>
+</header>
+
+<section>
+
+  <div id="connect-panel">
+    <div class="eyebrow">Step 1 — Connect</div>
+    <div id="connect-status">
+      <button id="connect-btn" class="btn-primary btn-block">Connect to Spotify</button>
+    </div>
+  </div>
+
+  <div id="picker-panel">
+    <div class="eyebrow">Step 2 — Select photos</div>
+    <div id="dropzone">
+      Choose screenshots of songs from your gallery.<br>You can select several at once.
+    </div>
+    <input type="file" id="file-input" accept="image/*" multiple style="margin-top:12px;width:100%;">
+    <button id="scan-btn" class="btn-primary btn-block" style="margin-top:12px;" disabled>Read text from photos</button>
+    <div id="status-bar"></div>
+    <div id="frames"></div>
+  </div>
+
+  <div id="playlist-panel" class="hidden">
+    <div class="eyebrow">Step 3 — Build the playlist</div>
+    <button id="search-btn" class="btn-secondary btn-block">Search Spotify for these tracks</button>
+    <div id="results"></div>
+    <label for="playlist-name">Playlist name</label>
+    <input type="text" id="playlist-name" placeholder="Screenshots Mix">
+    <button id="create-btn" class="btn-primary btn-block" style="margin-top:14px;" disabled>Create playlist</button>
+    <div id="create-status" style="margin-top:10px;font-size:13px;"></div>
+  </div>
+
+</section>
+
+<script>
+/* ============ CONFIG — fill these in before deploying ============ */
+const SPOTIFY_CLIENT_ID = "aeb339dba17e4699bb859a05f318cc6e";
+const REDIRECT_URI = window.location.origin + window.location.pathname;
+const SCOPES = "playlist-modify-public playlist-modify-private";
+/* =================================================================== */
+
+const els = {
+  connectBtn: document.getElementById('connect-btn'),
+  connectStatus: document.getElementById('connect-status'),
+  fileInput: document.getElementById('file-input'),
+  scanBtn: document.getElementById('scan-btn'),
+  frames: document.getElementById('frames'),
+  statusBar: document.getElementById('status-bar'),
+  playlistPanel: document.getElementById('playlist-panel'),
+  searchBtn: document.getElementById('search-btn'),
+  results: document.getElementById('results'),
+  playlistName: document.getElementById('playlist-name'),
+  createBtn: document.getElementById('create-btn'),
+  createStatus: document.getElementById('create-status'),
+};
+
+let frameData = []; // {id, file, url, rawText, title, artist, matches:[], chosenUri}
+
+/* ---------------- PKCE helpers ---------------- */
+function base64url(buffer){
+  return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+async function sha256(plain){
+  const data = new TextEncoder().encode(plain);
+  return await crypto.subtle.digest('SHA-256', data);
+}
+function randomString(len){
+  const arr = new Uint8Array(len);
+  crypto.getRandomValues(arr);
+  return Array.from(arr, b => ('0'+b.toString(16)).slice(-2)).join('').slice(0,len);
+}
+
+async function startAuth(){
+  const verifier = randomString(64);
+  localStorage.setItem('sp_verifier', verifier);
+  const challenge = base64url(await sha256(verifier));
+  const params = new URLSearchParams({
+    client_id: SPOTIFY_CLIENT_ID,
+    response_type: 'code',
+    redirect_uri: REDIRECT_URI,
+    scope: SCOPES,
+    code_challenge_method: 'S256',
+    code_challenge: challenge,
+  });
+  window.location.href = 'https://accounts.spotify.com/authorize?' + params.toString();
+}
+
+async function exchangeCodeForToken(code){
+  const verifier = localStorage.getItem('sp_verifier');
+  const body = new URLSearchParams({
+    client_id: SPOTIFY_CLIENT_ID,
+    grant_type: 'authorization_code',
+    code,
+    redirect_uri: REDIRECT_URI,
+    code_verifier: verifier,
+  });
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method: 'POST',
+    headers: {'Content-Type':'application/x-www-form-urlencoded'},
+    body,
+  });
+  const data = await res.json();
+  if(data.access_token){
+    localStorage.setItem('sp_access_token', data.access_token);
+    localStorage.setItem('sp_refresh_token', data.refresh_token || '');
+    localStorage.setItem('sp_token_expires', Date.now() + (data.expires_in*1000));
+  }
+  return data;
+}
+
+async function refreshToken(){
+  const refresh = localStorage.getItem('sp_refresh_token');
+  if(!refresh) return null;
+  const body = new URLSearchParams({
+    client_id: SPOTIFY_CLIENT_ID,
+    grant_type: 'refresh_token',
+    refresh_token: refresh,
+  });
+  const res = await fetch('https://accounts.spotify.com/api/token', {
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body,
+  });
+  const data = await res.json();
+  if(data.access_token){
+    localStorage.setItem('sp_access_token', data.access_token);
+    localStorage.setItem('sp_token_expires', Date.now() + (data.expires_in*1000));
+  }
+  return data.access_token;
+}
+
+async function getValidToken(){
+  const expires = Number(localStorage.getItem('sp_token_expires') || 0);
+  if(Date.now() > expires - 30000){
+    return await refreshToken();
+  }
+  return localStorage.getItem('sp_access_token');
+}
+
+function isConnected(){
+  return !!localStorage.getItem('sp_access_token');
+}
+
+function renderConnectState(){
+  if(isConnected()){
+    els.connectStatus.innerHTML = '<span class="connected-pill">Connected to Spotify</span>';
+  } else {
+    els.connectStatus.innerHTML = '<button id="connect-btn" class="btn-primary btn-block">Connect to Spotify</button>';
+    document.getElementById('connect-btn').addEventListener('click', startAuth);
+  }
+}
+
+/* Handle redirect back from Spotify */
+(async function handleRedirect(){
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  if(code){
+    els.statusBar.textContent = 'Finishing Spotify sign-in…';
+    await exchangeCodeForToken(code);
+    window.history.replaceState({}, document.title, REDIRECT_URI);
+  }
+  renderConnectState();
+})();
+
+/* ---------------- Photo selection + OCR ---------------- */
+els.fileInput.addEventListener('change', () => {
+  const files = Array.from(els.fileInput.files || []);
+  frameData = files.map((file, i) => ({
+    id: i,
+    file,
+    url: URL.createObjectURL(file),
+    rawText: '',
+    title: '',
+    artist: '',
+    matches: [],
+    chosenUri: null,
+  }));
+  els.scanBtn.disabled = frameData.length === 0;
+  renderFrames();
+});
+
+function renderFrames(){
+  els.frames.innerHTML = '';
+  frameData.forEach((f, idx) => {
+    const div = document.createElement('div');
+    div.className = 'frame';
+    div.innerHTML = `
+      <button class="remove-frame" data-idx="${idx}" title="Remove">×</button>
+      <img src="${f.url}">
+      <div class="frame-body">
+        <div class="frame-num">FRAME ${String(idx+1).padStart(2,'0')}</div>
+        <label>Song title</label>
+        <input type="text" class="title-input" data-idx="${idx}" value="${f.title}" placeholder="${f.rawText ? '' : 'scan to auto-fill'}">
+        <label>Artist</label>
+        <input type="text" class="artist-input" data-idx="${idx}" value="${f.artist}" placeholder="${f.rawText ? '' : 'scan to auto-fill'}">
+        ${f.rawText ? `<button class="toggle-raw" data-idx="${idx}">show raw text read from photo</button>
+        <div class="ocr-raw" id="raw-${idx}">${escapeHtml(f.rawText)}</div>` : ''}
+      </div>
+    `;
+    els.frames.appendChild(div);
+  });
+
+  els.frames.querySelectorAll('.remove-frame').forEach(b => b.addEventListener('click', e => {
+    const i = Number(e.target.dataset.idx);
+    frameData.splice(i, 1);
+    renderFrames();
+  }));
+  els.frames.querySelectorAll('.title-input').forEach(inp => inp.addEventListener('input', e => {
+    frameData[Number(e.target.dataset.idx)].title = e.target.value;
+  }));
+  els.frames.querySelectorAll('.artist-input').forEach(inp => inp.addEventListener('input', e => {
+    frameData[Number(e.target.dataset.idx)].artist = e.target.value;
+  }));
+  els.frames.querySelectorAll('.toggle-raw').forEach(b => b.addEventListener('click', e => {
+    document.getElementById('raw-' + e.target.dataset.idx).classList.toggle('show');
+  }));
+}
+
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Naive guess: first non-empty line = title, next non-empty line = artist.
+// Screenshots vary a lot (Spotify share cards, Shazam, Apple Music, texts),
+// so this is a starting guess — always editable above before searching.
+function guessTitleArtist(text){
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 1);
+  return { title: lines[0] || '', artist: lines[1] || '' };
+}
+
+els.scanBtn.addEventListener('click', async () => {
+  els.scanBtn.disabled = true;
+  for(let i = 0; i < frameData.length; i++){
+    els.statusBar.innerHTML = `<span class="developing">Developing frame ${i+1} of ${frameData.length}…</span>`;
+    try{
+      const { data: { text } } = await Tesseract.recognize(frameData[i].file, 'eng');
+      frameData[i].rawText = text.trim();
+      const guess = guessTitleArtist(frameData[i].rawText);
+      frameData[i].title = guess.title;
+      frameData[i].artist = guess.artist;
+    }catch(err){
+      frameData[i].rawText = '(could not read text from this image)';
+    }
+    renderFrames();
+  }
+  els.statusBar.textContent = 'Done. Check and fix the title/artist fields below, then continue.';
+  els.scanBtn.disabled = false;
+  els.playlistPanel.classList.remove('hidden');
+});
+
+/* ---------------- Spotify search + playlist creation ---------------- */
+els.searchBtn.addEventListener('click', async () => {
+  if(!isConnected()){ startAuth(); return; }
+  const token = await getValidToken();
+  els.results.innerHTML = '';
+  for(const f of frameData){
+    if(!f.title){ continue; }
+    const q = encodeURIComponent(`track:${f.title} artist:${f.artist}`.trim());
+    const res = await fetch(`https://api.spotify.com/v1/search?q=${q}&type=track&limit=5`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const data = await res.json();
+    f.matches = (data.tracks && data.tracks.items) || [];
+    f.chosenUri = f.matches[0] ? f.matches[0].uri : null;
+    renderMatch(f);
+  }
+  els.createBtn.disabled = !frameData.some(f => f.chosenUri);
+});
+
+function renderMatch(f){
+  const wrap = document.createElement('div');
+  if(f.matches.length === 0){
+    wrap.innerHTML = `<div class="no-match">No Spotify match found for "${escapeHtml(f.title)}"${f.artist ? ' — ' + escapeHtml(f.artist) : ''}. Edit the fields above and search again.</div>`;
+  } else {
+    const top = f.matches[0];
+    const artistNames = top.artists.map(a => a.name).join(', ');
+    const art = top.album.images[2] ? top.album.images[2].url : (top.album.images[0] ? top.album.images[0].url : '');
+    let optionsHtml = f.matches.map((m, i) =>
+      `<option value="${i}">${escapeHtml(m.name)} — ${escapeHtml(m.artists.map(a=>a.name).join(', '))}</option>`
+    ).join('');
+    wrap.innerHTML = `
+      <div class="match-card">
+        <img src="${art}">
+        <div>
+          <div class="match-title">${escapeHtml(top.name)}</div>
+          <div class="match-artist">${escapeHtml(artistNames)}</div>
+        </div>
+      </div>
+      <select data-uri-holder="${f.id}">${optionsHtml}</select>
+    `;
+    wrap.querySelector('select').addEventListener('change', e => {
+      f.chosenUri = f.matches[Number(e.target.value)].uri;
+    });
+  }
+  els.results.appendChild(wrap);
+}
+
+els.createBtn.addEventListener('click', async () => {
+  els.createBtn.disabled = true;
+  els.createStatus.textContent = 'Creating playlist…';
+  const token = await getValidToken();
+  const meRes = await fetch('https://api.spotify.com/v1/me', { headers: { Authorization: `Bearer ${token}` }});
+  const me = await meRes.json();
+  const name = els.playlistName.value.trim() || 'Screenshots Mix';
+
+  const plRes = await fetch(`https://api.spotify.com/v1/users/${me.id}/playlists`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, description: 'Built from gallery screenshots.', public: false })
+  });
+  const playlist = await plRes.json();
+
+  const uris = frameData.filter(f => f.chosenUri).map(f => f.chosenUri);
+  if(uris.length){
+    await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uris })
+    });
+  }
+  els.createStatus.innerHTML = `Done — <a class="playlist-link" href="${playlist.external_urls.spotify}" target="_blank">open "${escapeHtml(name)}" in Spotify</a>`;
+});
+</script>
+</body>
+</html>
