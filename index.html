@@ -467,20 +467,71 @@ els.scanBtn.addEventListener('click', async () => {
 
 /* ---------------- Spotify search + playlist creation ---------------- */
 els.searchBtn.addEventListener('click', async () => {
-  if(!isConnected()){ startAuth(); return; }
-  const token = await getValidToken();
   els.results.innerHTML = '';
-  for(const f of frameData){
-    if(!f.title){ continue; }
-    const q = encodeURIComponent(`track:${f.title} artist:${f.artist}`.trim());
-    const res = await fetch(`https://api.spotify.com/v1/search?q=${q}&type=track&limit=5`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    const data = await res.json();
-    f.matches = (data.tracks && data.tracks.items) || [];
-    f.chosenUri = f.matches[0] ? f.matches[0].uri : null;
-    renderMatch(f);
+
+  if(!isConnected()){
+    els.results.innerHTML = '<div class="no-match">Not connected to Spotify yet — tap "Connect to Spotify" above first.</div>';
+    return;
   }
+
+  const withTitle = frameData.filter(f => f.title && f.title.trim());
+  if(withTitle.length === 0){
+    els.results.innerHTML = '<div class="no-match">No song titles to search yet. Select photos, tap "Read text from photos", then check the title/artist fields before searching.</div>';
+    return;
+  }
+
+  els.searchBtn.disabled = true;
+  const originalLabel = els.searchBtn.textContent;
+  els.searchBtn.textContent = 'Searching…';
+
+  let token;
+  try{
+    token = await getValidToken();
+  }catch(err){
+    els.results.innerHTML = `<div class="no-match">Could not refresh your Spotify session: ${escapeHtml(String(err))}. Try tapping "Connect to Spotify" again.</div>`;
+    els.searchBtn.disabled = false;
+    els.searchBtn.textContent = originalLabel;
+    return;
+  }
+
+  if(!token){
+    els.results.innerHTML = '<div class="no-match">Your Spotify session expired. Tap "Connect to Spotify" above to sign in again.</div>';
+    els.searchBtn.disabled = false;
+    els.searchBtn.textContent = originalLabel;
+    return;
+  }
+
+  for(const f of frameData){
+    if(!f.title || !f.title.trim()){
+      const wrap = document.createElement('div');
+      wrap.innerHTML = `<div class="no-match">Frame ${String(frameData.indexOf(f)+1).padStart(2,'0')}: no title entered, skipped.</div>`;
+      els.results.appendChild(wrap);
+      continue;
+    }
+    try{
+      const q = encodeURIComponent(`track:${f.title} artist:${f.artist}`.trim());
+      const res = await fetch(`https://api.spotify.com/v1/search?q=${q}&type=track&limit=5`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if(res.status === 401){
+        els.results.innerHTML += '<div class="no-match">Spotify session expired mid-search. Tap "Connect to Spotify" again and retry.</div>';
+        break;
+      }
+      const data = await res.json();
+      if(data.error){
+        els.results.innerHTML += `<div class="no-match">Spotify error for "${escapeHtml(f.title)}": ${escapeHtml(data.error.message || 'unknown error')}</div>`;
+        continue;
+      }
+      f.matches = (data.tracks && data.tracks.items) || [];
+      f.chosenUri = f.matches[0] ? f.matches[0].uri : null;
+      renderMatch(f);
+    }catch(err){
+      els.results.innerHTML += `<div class="no-match">Network error searching for "${escapeHtml(f.title)}": ${escapeHtml(String(err))}</div>`;
+    }
+  }
+
+  els.searchBtn.disabled = false;
+  els.searchBtn.textContent = originalLabel;
   els.createBtn.disabled = !frameData.some(f => f.chosenUri);
 });
 
