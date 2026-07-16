@@ -513,11 +513,18 @@ els.searchBtn.addEventListener('click', async () => {
       const res = await fetch(`https://api.spotify.com/v1/search?q=${q}&type=track&limit=5`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      const rawText = await res.text();
+      let data;
+      try{
+        data = JSON.parse(rawText);
+      }catch(parseErr){
+        els.results.innerHTML += `<div class="no-match">Got a non-JSON response for "${escapeHtml(f.title)}" (status ${res.status}). Raw response start:<br><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;">${escapeHtml(rawText.slice(0,300))}</span></div>`;
+        continue;
+      }
       if(res.status === 401){
         els.results.innerHTML += '<div class="no-match">Spotify session expired mid-search. Tap "Connect to Spotify" again and retry.</div>';
         break;
       }
-      const data = await res.json();
       if(data.error){
         els.results.innerHTML += `<div class="no-match">Spotify error for "${escapeHtml(f.title)}": ${escapeHtml(data.error.message || 'unknown error')}</div>`;
         continue;
